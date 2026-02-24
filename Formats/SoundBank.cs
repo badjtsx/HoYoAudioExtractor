@@ -1,4 +1,5 @@
-﻿using HoYoAudioExtractor.Entries;
+﻿using System.Buffers.Binary;
+using HoYoAudioExtractor.Entries;
 
 namespace HoYoAudioExtractor.Formats
 {
@@ -22,46 +23,36 @@ namespace HoYoAudioExtractor.Formats
 
 		public void Parse()
 		{
-			using (MemoryStream ms = new MemoryStream(Data))
-			using (BinaryReader reader = new BinaryReader(ms))
-			{
-				ParseSections(reader);
-				ParseAudioEntries();
-			}
+			int pos = 0;
+			ParseSections(Data, ref pos);
+			ParseAudioEntries();
 		}
 
-		public void ParseSections(BinaryReader reader)
+		public void ParseSections(ReadOnlySpan<byte> data, ref int pos)
 		{
-			while (true)
+			while (pos + 8 <= data.Length)
 			{
-				string magicBytes = new string(reader.ReadChars(4));
-				if (magicBytes.Length < 4) break;
-				string magic = magicBytes;
+				string magic = System.Text.Encoding.ASCII.GetString(data.Slice(pos, 4));
+				if (magic != "BKHD" && magic != "DIDX" && magic != "DATA") break;
+				pos += 4;
 
-				if (magic != "BKHD" && magic != "DIDX" && magic != "DATA")
-				{
-					reader.BaseStream.Seek(-4, SeekOrigin.Current);
-					break;
-				}
-
-				int size = reader.ReadInt32();
+				int size = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos));
+				pos += 4;
 
 				if (magic == "DATA")
 				{
-					_dataOffset = (int)reader.BaseStream.Position;
+					_dataOffset = pos;
 					_dataSize = size;
-					reader.BaseStream.Seek(size, SeekOrigin.Current);
+					pos += size;
 					break;
 				}
 				else
 				{
-					byte[] sectionData = reader.ReadBytes(size);
-					Sections[magic] = new SoundbankSection(magic, sectionData);
+					Sections[magic] = new SoundbankSection(magic, data.Slice(pos, size).ToArray());
+					pos += size;
 				}
 			}
-
-			int remaining = (int)(reader.BaseStream.Length - reader.BaseStream.Position);
-			_trailingData = reader.ReadBytes(remaining);
+			_trailingData = data[pos..].ToArray();
 		}
 
 		public void ParseAudioEntries()
@@ -78,9 +69,9 @@ namespace HoYoAudioExtractor.Formats
 			{
 				int offset = i * entrySize;
 
-				int audioId = BitConverter.ToInt32(didxData, offset);
-				int fileOffset = BitConverter.ToInt32(didxData, offset + 4);
-				int fileSize = BitConverter.ToInt32(didxData, offset + 8);
+				int audioId = BinaryPrimitives.ReadInt32LittleEndian(didxData.AsSpan(offset));
+				int fileOffset = BinaryPrimitives.ReadInt32LittleEndian(didxData.AsSpan(offset + 4));
+				int fileSize = BinaryPrimitives.ReadInt32LittleEndian(didxData.AsSpan(offset + 8));
 
 				Files.Add(new WemFile((ulong)audioId, fileOffset, fileSize, "wem"));
 			}

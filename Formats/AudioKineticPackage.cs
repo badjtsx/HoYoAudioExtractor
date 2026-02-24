@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+﻿using static System.Buffers.Binary.BinaryPrimitives;
 using System.Diagnostics;
 using HoYoAudioExtractor.Entries;
 
@@ -24,63 +24,13 @@ namespace HoYoAudioExtractor.Formats
 
 			var fileEntries = new List<FileEntry>();
 
-			int banks = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(0x10));
-			int streamed = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(0x14));
-			int external = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(0x18));
+			int banks = ReadInt32LittleEndian(data.AsSpan(0x10));
+			int streamed = ReadInt32LittleEndian(data.AsSpan(0x14));
+			int external = ReadInt32LittleEndian(data.AsSpan(0x18));
 
-			if (banks != 4)
-			{
-				int count = ParseFileCount(data, ref pos);
-				for (int i = 0; i < count; i++)
-				{
-					int savedPos = pos;
-					try
-					{
-						fileEntries.Add(Parse32(data, ref pos));
-					}
-					catch (InvalidDataException ex)
-					{
-						pos = savedPos + 20;
-						Console.WriteLine($"Warning: Skipping entry - {ex.Message}");
-					}
-				}
-			}
-
-			if (streamed != 4)
-			{
-				int count = ParseFileCount(data, ref pos);
-				for (int i = 0; i < count; i++)
-				{
-					int savedPos = pos;
-					try
-					{
-						fileEntries.Add(Parse32(data, ref pos));
-					}
-					catch (InvalidDataException ex)
-					{
-						pos = savedPos + 20;
-						Console.WriteLine($"Warning: Skipping entry - {ex.Message}");
-					}
-				}
-			}
-				
-			if (external != 4)
-			{
-				int count = ParseFileCount(data, ref pos);
-				for (int i = 0; i < count; i++)
-				{
-					int savedPos = pos;
-					try
-					{
-						fileEntries.Add(Parse64(data, ref pos));
-					}
-					catch (InvalidDataException ex)
-					{
-						pos = savedPos + 24;
-						Console.WriteLine($"Warning: Skipping entry - {ex.Message}");
-					}
-				}
-			}
+			if (banks != 4) ParseFileEntry(data, fileEntries, ref pos, false);
+			if (streamed != 4) ParseFileEntry(data, fileEntries, ref pos, false);
+			if (external != 4) ParseFileEntry(data, fileEntries, ref pos, true);
 
 			foreach (var entry in fileEntries)
 			{
@@ -100,21 +50,39 @@ namespace HoYoAudioExtractor.Formats
 			}
 		}
 
+		public void ParseFileEntry(ReadOnlySpan<byte> data, List<FileEntry> fileEntries, ref int pos, bool is64)
+		{
+			int count = ParseFileCount(data, ref pos);
+			for (int i = 0; i < count; i++)
+			{
+				int savedPos = pos;
+				try
+				{
+					fileEntries.Add(is64 ? ParseByBit(data, ref pos, true) : ParseByBit(data, ref pos, false));
+				}
+				catch (InvalidDataException ex)
+				{
+					pos = is64 ? savedPos + 24 : savedPos + 20;
+					Console.WriteLine($"Warning: Skipping entry - {ex.Message}");
+				}
+			}
+		}
+
 		public void ParseAKPK(ReadOnlySpan<byte> data, ref int pos)
 		{
 			if (data[pos..(pos + 4)].SequenceEqual("AKPK"u8))
 			{
 				int toSubstract = 0;
 				pos += 12;
-				int MetaDataSize = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos));
+				int MetaDataSize = ReadInt32LittleEndian(data.Slice(pos));
 				pos += 4;
-				if (BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 8; }
+				if (ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 8; }
 				pos += 4;
-				if (toSubstract == 0) { if (BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 4; } }
+				if (toSubstract == 0) { if (ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 4; } }
 				pos += 4;
-				if (toSubstract != 0 && BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 8; }
+				if (toSubstract != 0 && ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 8; }
 				pos += 4;
-				LanguageCount = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos)) - 1;
+				LanguageCount = ReadInt32LittleEndian(data.Slice(pos)) - 1;
 				pos += 4;
 				pos += 4;
 				pos += MetaDataSize - toSubstract;
@@ -123,58 +91,30 @@ namespace HoYoAudioExtractor.Formats
 
 		public int ParseFileCount(ReadOnlySpan<byte> data, ref int pos)
 		{
-			int AudioFileCount = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos));
+			int AudioFileCount = ReadInt32LittleEndian(data.Slice(pos));
 			pos += 4;
 			return AudioFileCount;
 		}
 
-		public FileEntry Parse64(ReadOnlySpan<byte> data, ref int pos)
+		public FileEntry ParseByBit(ReadOnlySpan<byte> data, ref int pos, bool is64)
 		{
-			uint IdLow = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(pos));
-			pos += 4;
-			uint IdHigh = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(pos));
-			pos += 4;
-			int blockSize = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos));
-			pos += 4;
-			int Size = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos));
-			pos += 4;
-			int Offset = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos)) * blockSize;
-			string type = "Unknown";
-
-			if (Offset + 4 < data.Length)
+			ulong Id;
+			if (is64)
 			{
-				if (data[Offset..(Offset + 4)].SequenceEqual("BKHD"u8))
-				{
-					type = "bnk";
-					pos += 4;
-					pos += 4;
-					ulong Id = ((ulong)IdHigh << 32) | IdLow;
-
-					return new BnkFile(Id, Offset, Size, type);
-				}
-				else if (data[Offset..(Offset + 4)].SequenceEqual("RIFF"u8))
-				{
-					type = "wem";
-					pos += 4;
-					pos += 4;
-					ulong Id = ((ulong)IdHigh << 32) | IdLow;
-
-					return new WemFile(Id, Offset, Size, type);
-				}
+				Id = (ulong)ReadUInt32LittleEndian(data.Slice(pos + 4)) << 32
+				   | ReadUInt32LittleEndian(data.Slice(pos));
+				pos += 8;
 			}
-
-			throw new InvalidDataException($"Unknown file type at offset {Offset}");
-		}
-
-		public FileEntry Parse32(ReadOnlySpan<byte> data, ref int pos)
-		{
-			uint Id = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(pos));
+			else
+			{
+				Id = ReadUInt32LittleEndian(data.Slice(pos));
+				pos += 4;
+			}
+			int blockSize = ReadInt32LittleEndian(data.Slice(pos));
 			pos += 4;
-			int blockSize = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos));
+			int Size = ReadInt32LittleEndian(data.Slice(pos));
 			pos += 4;
-			int Size = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos));
-			pos += 4;
-			int Offset = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(pos)) * blockSize;
+			int Offset = ReadInt32LittleEndian(data.Slice(pos)) * blockSize;
 			string type = "Unknown";
 
 			if (Offset + 4 < data.Length)
@@ -202,6 +142,7 @@ namespace HoYoAudioExtractor.Formats
 			}
 			throw new InvalidDataException($"Unknown file type at offset {Offset}");
 		}
+
 		public static void ConvertToWav(FileInfo wemFile, DirectoryInfo outputDir)
 		{
 			string outputPath = Path.Combine(outputDir.FullName,

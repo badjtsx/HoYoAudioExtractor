@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+﻿using static System.Buffers.Binary.BinaryPrimitives;
 using System.Text;
 
 namespace HoYoAudioExtractor.Formats
@@ -22,9 +22,9 @@ namespace HoYoAudioExtractor.Formats
 			Encoding.ASCII.GetBytes(Magic, span);
 
 			if (littleEndian)
-				BinaryPrimitives.WriteInt32LittleEndian(span.Slice(Magic.Length), Data.Length);
+				WriteInt32LittleEndian(span.Slice(Magic.Length), Data.Length);
 			else
-				BinaryPrimitives.WriteInt32BigEndian(span.Slice(Magic.Length), Data.Length);
+				WriteInt32BigEndian(span.Slice(Magic.Length), Data.Length);
 
 			Data.CopyTo(result, Magic.Length + 4);
 
