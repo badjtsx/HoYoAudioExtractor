@@ -1,7 +1,7 @@
 # Hoyo Audio Extractor
 
 A command-line tool for extracting audio files from Audiokinetic package (.pck) 
-files used in HoYoverse games (HoYo Impact, Honkai: Star Rail, Honkai Impact, ZZZ).
+files used in HoYoverse games (Genshin Impact, Honkai: Star Rail, Honkai Impact, ZZZ).
 
 ## Requirements
 - .NET 10.0
@@ -23,14 +23,14 @@ HoYoAudioExtractor <input> <output_dir> [options]
 HoYoAudioExtractor Banks0.pck output/
 
 # Extract all packages in a directory
-HoYoAudioExtractor "C:\Program Files\HoYo Impact\HoYo Impact game\HoYoImpact_Data\StreamingAssets\AudioAssets" output/
+HoYoAudioExtractor "C:\Program Files\Genshin Impact\Genshin Impact game\GenshinImpact_Data\StreamingAssets\AudioAssets" output/
 
 # Extract and convert to wav
 HoYoAudioExtractor Streamed0.pck output/ --convertWem
 ```
 
 ## Supported Games
-- HoYo Impact
+- Genshin Impact
 - Honkai: Star Rail
 - Honkai Impact 3rd
 - Zenless Zone Zero
