@@ -72,20 +72,20 @@ namespace HoYoAudioExtractor.Formats
 		{
 			if (data[pos..(pos + 4)].SequenceEqual("AKPK"u8))
 			{
-				int toSubstract = 0;
+				int toSubtract = 0;
 				pos += 12;
 				int MetaDataSize = ReadInt32LittleEndian(data.Slice(pos));
 				pos += 4;
-				if (ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 8; }
+				if (ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubtract = 8; }
 				pos += 4;
-				if (toSubstract == 0) { if (ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 4; } }
+				if (toSubtract == 0) { if (ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubtract = 4; } }
 				pos += 4;
-				if (toSubstract != 0 && ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubstract = 8; }
+				if (toSubtract != 0 && ReadInt32LittleEndian(data.Slice(pos)) != 4) { toSubtract = 8; }
 				pos += 4;
 				LanguageCount = ReadInt32LittleEndian(data.Slice(pos)) - 1;
 				pos += 4;
 				pos += 4;
-				pos += MetaDataSize - toSubstract;
+				pos += MetaDataSize - toSubtract;
 			}
 		}
 
